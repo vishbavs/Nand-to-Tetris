@@ -1,0 +1,99 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/CPU.hdl
+
+/**
+ * The Hack CPU (Central Processing unit), consisting of an ALU,
+ * two registers named A and D, and a program counter named PC.
+ * The CPU is designed to fetch and execute instructions written in 
+ * the Hack machine language. In particular, functions as follows:
+ * Executes the inputted instruction according to the Hack machine 
+ * language specification. The D and A in the language specification
+ * refer to CPU-resident registers, while M refers to the external
+ * memory location addressed by A, i.e. to Memory[A]. The inM input 
+ * holds the value of this location. If the current instruction needs 
+ * to write a value to M, the value is placed in outM, the address 
+ * of the target location is placed in the addressM output, and the 
+ * writeM control bit is asserted. (When writeM==0, any value may 
+ * appear in outM). The outM and writeM outputs are combinational: 
+ * they are affected instantaneously by the execution of the current 
+ * instruction. The addressM and pc outputs are clocked: although they 
+ * are affected by the execution of the current instruction, they commit 
+ * to their new values only in the next time step. If reset==1 then the 
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
+ * than to the address resulting from executing the current instruction. 
+ */
+
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? if instruction[3]
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+    // Put your code here:
+    And(a=instruction[5],b=instruction[15],out=po);
+	Mux16(a=instruction[0..15],b=out4,sel=po,out=out1);
+	Not(in=instruction[15],out=acheck);
+	Or(a=po,b=acheck,out=areg);
+	ARegister(in=out1,load=areg,out=out2,out[0..14]=addressM);
+	Mux16(a=out2,b=inM,sel=instruction[12],out=out3);
+	ALU(x=out5,y=out3,zx=instruction[11],nx=instruction[10],zy=instruction[9],ny=instruction[8],f=instruction[7],no=instruction[6],out=out4,out=outM,zr=yo1,ng=yo2);
+	And(a=instruction[15],b=instruction[3],out=writeM);
+	And(a=instruction[15],b=instruction[4],out=dreg);
+	DRegister(in=out4,load=dreg,out=out5);
+	PC(reset=reset,in=out2,load=l1,inc=true,out[0..14]=pc);
+	
+	Not(in=yo1,out=eq);
+	Not(in=yo2,out=less);
+	Not(in=instruction[0],out=j3);
+	Not(in=instruction[1],out=j2);
+	Not(in=instruction[2],out=j1);
+	
+	And(a=instruction[0],b=instruction[1],out=temp);
+	And(a=temp,b=instruction[2],out=cond1);
+
+	And(a=instruction[2],b=instruction[1],out=temp2);
+	And(a=temp2,b=j3,out=cond2temp);
+	Xor(a=yo1,b=yo2,out=temp3);
+	And(a=cond2temp,b=temp3,out=cond2);
+
+	And(a=instruction[2],b=instruction[0],out=temp4);
+	And(a=temp4,b=j2,out=cond3temp);
+	And(a=eq,b=less,out=temp5);
+	And(a=eq,b=yo2,out=temp6);
+	Or(a=temp5,b=temp6,out=temp7);
+	And(a=cond3temp,b=temp7,out=cond3);
+
+	//using temp6
+	And(a=j2,b=j3,out=temp8);
+	And(a=temp8,b=instruction[2],out=cond4temp);
+	And(a=temp6,b=cond4temp,out=cond4);
+
+	//both 0 is temp5
+	And(a=instruction[0],b=instruction[1],out=temp11);
+	And(a=temp11,b=j1,out=cond5temp);
+	And(a=yo1,b=less,out=temp9);
+	Or(a=temp9,b=temp5,out=temp10);
+	And(a=temp10,b=cond5temp,out=cond5);
+
+	//till temp11 is used
+	And(a=j1,b=j3,out=temp12);
+	And(a=temp12,b=instruction[1],out=cond6temp);	
+	And(a=temp9,b=cond6temp,out=cond6);
+
+	And(a=j1,b=j2,out=temp13);
+	And(a=temp13,b=instruction[0],out=cond7temp);
+	And(a=temp5,b=cond7temp,out=cond7);
+
+	Or8Way(in[0]=cond1,in[1]=cond2,in[2]=cond3,in[3]=cond4,in[4]=cond5,in[5]=cond6,in[6]=cond7,in[7]=false,out=whew);
+	And(a=instruction[15],b=whew,out=l1);	
+}
